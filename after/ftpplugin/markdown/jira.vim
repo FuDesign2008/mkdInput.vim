@@ -66,35 +66,81 @@ function! s:ExtractTitle (content)
     return strpart(title, 1)
 endfun
 
+function! s:FullUrl (url)
+    if match(a:url, '^http') > -1
+        return a:url
+    endif
+    if match(a:url, '^[a-zA-Z]\+-[0-9]\+$')
+        return "http://jira.corp.youdao.com/browse/" . a:url
+    endif
+endfun
+
 "
 function! s:InsertJiraAsOrderedList (url)
-    let content = s:ReadHtml(a:url)
+    let fullUrl = s:FullUrl(a:url)
+    if strlen(fullUrl) < 2
+        echomsg "Url is not valid: " . a:url
+        return
+    endif
+    let content = s:ReadHtml(fullUrl)
     "let content = s:ReadTest()
     let title = s:ExtractTitle(content)
     echo title
     if strlen(title) < 2
-        echomsg 'Can not find title at ' . a:url
+        echomsg 'Can not find title at ' . fullUrl
         return
     endif
-    let line = '1. [' . title . '](' . a:url .')'
+    let line = '1. [' . title . '](' . fullUrl .')'
     call append('.', line)
 endfun
 
 function! s:InsertJiraAsUnorderedList (url)
-    let content = s:ReadHtml(a:url)
+    let fullUrl = s:FullUrl(a:url)
+    if strlen(fullUrl) < 2
+        echomsg "Url is not valid: " . a:url
+        return
+    endif
+    let content = s:ReadHtml(fullUrl)
     "let content = s:ReadTest()
     let title = s:ExtractTitle(content)
     echo title
     if strlen(title) < 2
-        echomsg 'Can not find title at ' . a:url
+        echomsg 'Can not find title at ' . fullUrl
         return
     endif
-    let line = '    * [' . title . '](' . a:url .')'
+    let line = '    * [' . title . '](' . fullUrl .')'
     call append('.', line)
+endfun
+
+function! s:UpdateCurrentLine()
+    let line = getline('.')
+    let flag = matchstr(line, '\/[a-zA-Z]\+-[0-9]\+')
+    let flag = strpart(flag, 1)
+    if strlen(flag) < 2
+        echomsg "Can't find jira on this line!"
+    endif
+    let fullUrl = s:FullUrl(flag)
+    if strlen(fullUrl) < 2
+        echomsg "Url is not valid: " . flag
+        return
+    endif
+    let content = s:ReadHtml(fullUrl)
+    let title = s:ExtractTitle(content)
+    if strlen(title) < 2
+        echomsg 'Can not find title at ' . fullUrl
+        return
+    endif
+    if match(line, '^1\. ')
+        let new_line = '1. [' . title . '](' . fullUrl .')'
+    else
+        let new_line = '    * [' . title . '](' . fullUrl .')'
+    endif
+    call setline('.', new_line)
 endfun
 
 command! -nargs=* OlJira call s:InsertJiraAsOrderedList('<args>')
 command! -nargs=* UlJira call s:InsertJiraAsUnorderedList('<args>')
+command! -nargs=0 UpdateJira call s:UpdateCurrentLine()
 
 let &cpo = s:save_cpo
 
