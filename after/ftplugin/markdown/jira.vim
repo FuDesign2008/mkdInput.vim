@@ -15,10 +15,23 @@ if exist('s:mkdInput_jira')
 endif
 
 let s:mkdInput_jira = 1
+let s:cachedTitles = {}
+
+"@param {String} url
+"@return {String}
+function! s:FullUrl (url)
+    if match(a:url, '^http') > -1
+        return a:url
+    endif
+    if match(a:url, '^[a-zA-Z]\+-[0-9]\+$') > -1
+        return "http://jira.corp.youdao.com/browse/" . a:url
+    endif
+endfun
+
 
 " @param {String} url
 " @return {String}
-function! s:ReadHtml(url)
+function! s:DownloadHtml(url)
     if empty(a:url)
         return ''
     endif
@@ -26,7 +39,7 @@ function! s:ReadHtml(url)
         if !exists('g:jira_username')
             let path = expand('~/jira.vim')
             if filereadable(path)
-                source path
+                exec ':so ' . path
             else
                 echomsg "~/jira.vim does not exists!"
                 return ''
@@ -37,12 +50,54 @@ function! s:ReadHtml(url)
             return ''
         endif
         let params = '--data "os_username='. g:jira_username . '&os_password=' . g:jira_password . '" ' . a:url
-        let content = system("curl ", shellescape(params))
+        "let content = system("curl ", shellescape(params))
+        let content = system("curl -s " . params)
         return content
     else
         echoerr 'mkdInput_jira need curl support!'
     endif
 endfunction
+"@param {String} content
+"@return {String}
+function! s:ExtractTitle (content)
+    let h2 = matchstr(a:content, '<h2[^>]\+>[^<]*<a[^>]\+>[^<]\+</a>[^<]*</h2>')
+    let title = matchstr(h2, '>[^<]\+')
+    return strpart(title, 1)
+endfun
+
+function! s:CreateListItem (title, url, ordered)
+    if empty(a:title) || empty(a:url)
+        return ''
+    endif
+    return (a:ordered ? '1.' : '    *') . ' [' . a:title . '](' . a:url .')'
+endfun
+
+" @param {String} url
+" @param {Boolean} ordered
+" @return {String}
+function! s:GetListItem (url, ordered)
+    let fullUrl = s:FullUrl(a:url)
+    let title = ''
+    if empty(fullUrl)
+        echomsg "Url is not valid: " . a:url
+        return
+    endif
+    if has_key(s:cachedTitles, fullUrl)
+        let title = get(s:cachedTitles, fullUrl, '')
+    else
+        let content = s:DownloadHtml(fullUrl)
+        let title = s:ExtractTitle(content)
+        if !empty(title)
+            let s:cachedTitles[fullUrl] = title
+        endif
+    endif
+
+    if !empty(title)
+        return s:CreateListItem(title, fullUrl, a:ordered)
+    endif
+    echomsg 'Can not find title at ' . fullUrl
+endfun
+
 
 function! s:ReadTest()
     enew
@@ -58,89 +113,39 @@ function! s:ReadTest()
     return join(lines, '')
 endfun
 
-"@param {String} content
-"@return {String}
-function! s:ExtractTitle (content)
-    let h2 = matchstr(a:content, '<h2[^>]\+>[^<]*<a[^>]\+>[^<]\+</a>[^<]*</h2>')
-    let title = matchstr(h2, '>[^<]\+')
-    return strpart(title, 1)
-endfun
-
-function! s:FullUrl (url)
-    if match(a:url, '^http') > -1
-        return a:url
-    endif
-    if match(a:url, '^[a-zA-Z]\+-[0-9]\+$')
-        return "http://jira.corp.youdao.com/browse/" . a:url
-    endif
-endfun
 
 "
 function! s:InsertJiraAsOrderedList (url)
-    let fullUrl = s:FullUrl(a:url)
-    if strlen(fullUrl) < 2
-        echomsg "Url is not valid: " . a:url
-        return
+    let line = s:GetListItem(a:url, 1)
+    if !empty(line)
+        call append('.', line)
     endif
-    let content = s:ReadHtml(fullUrl)
-    "let content = s:ReadTest()
-    let title = s:ExtractTitle(content)
-    echo title
-    if strlen(title) < 2
-        echomsg 'Can not find title at ' . fullUrl
-        return
-    endif
-    let line = '1. [' . title . '](' . fullUrl .')'
-    call append('.', line)
 endfun
 
 function! s:InsertJiraAsUnorderedList (url)
-    let fullUrl = s:FullUrl(a:url)
-    if strlen(fullUrl) < 2
-        echomsg "Url is not valid: " . a:url
-        return
+    let line = s:GetListItem(a:url, 0)
+    if !empty(line)
+        call append('.', line)
     endif
-    let content = s:ReadHtml(fullUrl)
-    "let content = s:ReadTest()
-    let title = s:ExtractTitle(content)
-    echo title
-    if strlen(title) < 2
-        echomsg 'Can not find title at ' . fullUrl
-        return
-    endif
-    let line = '    * [' . title . '](' . fullUrl .')'
-    call append('.', line)
 endfun
 
 function! s:UpdateCurrentLine()
     let line = getline('.')
-    let flag = matchstr(line, '\/[a-zA-Z]\+-[0-9]\+')
-    let flag = strpart(flag, 1)
-    if strlen(flag) < 2
+    let url = matchstr(line, '\/[a-zA-Z]\+-[0-9]\+')
+    let url = strpart(url, 1)
+    if empty(url)
         echomsg "Can't find jira on this line!"
-    endif
-    let fullUrl = s:FullUrl(flag)
-    if strlen(fullUrl) < 2
-        echomsg "Url is not valid: " . flag
         return
     endif
-    let content = s:ReadHtml(fullUrl)
-    let title = s:ExtractTitle(content)
-    if strlen(title) < 2
-        echomsg 'Can not find title at ' . fullUrl
-        return
+    let new_line = s:GetListItem(url, match(line, '^1\.') > -1)
+    if !empty(new_line)
+        call setline('.', new_line)
     endif
-    if match(line, '^1\. ')
-        let new_line = '1. [' . title . '](' . fullUrl .')'
-    else
-        let new_line = '    * [' . title . '](' . fullUrl .')'
-    endif
-    call setline('.', new_line)
 endfun
 
 command! -nargs=* OlJira call s:InsertJiraAsOrderedList('<args>')
 command! -nargs=* UlJira call s:InsertJiraAsUnorderedList('<args>')
-command! -nargs=0 UpdateJira call s:UpdateCurrentLine()
+command! -range UpdateJira <line1>,<line2>call s:UpdateCurrentLine()
 
 let &cpo = s:save_cpo
 
