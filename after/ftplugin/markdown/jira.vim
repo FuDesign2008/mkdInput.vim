@@ -10,7 +10,7 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 
-if exist('s:mkdInput_jira')
+if exists('s:mkdInput_jira')
     finish
 endif
 
