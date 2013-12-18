@@ -62,7 +62,10 @@ endfunction
 function! s:ExtractTitle (content)
     let h2 = matchstr(a:content, '<h2[^>]\+>[^<]*<a[^>]\+>[^<]\+</a>[^<]*</h2>')
     let title = matchstr(h2, '>[^<]\+')
-    return strpart(title, 1)
+    let title = strpart(title, 1)
+    let title = substitute(title, '^[[:space:][:blank:]]\+', '', '')
+    let title = substitute(title, '[[:space:][:blank:]]\+$', '', '')
+    return title
 endfun
 
 function! s:CreateListItem (title, url, ordered)
