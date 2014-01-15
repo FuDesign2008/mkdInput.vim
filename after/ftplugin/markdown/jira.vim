@@ -81,6 +81,7 @@ endfun
 function! s:GetListItem (url, ordered)
     let fullUrl = s:FullUrl(a:url)
     let title = ''
+    let content = ''
     if empty(fullUrl)
         echomsg "Url is not valid: " . a:url
         return
@@ -89,6 +90,11 @@ function! s:GetListItem (url, ordered)
         let title = get(s:cachedTitles, fullUrl, '')
     else
         let content = s:DownloadHtml(fullUrl)
+        if empty(content)
+            echomsg 'DownloadHtml ' . fullUrl . ' is blank'
+            return
+        endif
+
         let title = s:ExtractTitle(content)
         if !empty(title)
             let s:cachedTitles[fullUrl] = title
@@ -98,7 +104,7 @@ function! s:GetListItem (url, ordered)
     if !empty(title)
         return s:CreateListItem(title, fullUrl, a:ordered)
     endif
-    echomsg 'Can not find title at ' . fullUrl
+    echomsg 'Can not find title at ' . fullUrl . ': ' . content
 endfun
 
 
