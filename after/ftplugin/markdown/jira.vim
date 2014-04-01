@@ -57,6 +57,29 @@ function! s:DownloadHtml(url)
         echoerr 'mkdInput_jira need curl support!'
     endif
 endfunction
+
+"@param {String} fielPath
+function! s:OpenFile(filePath)
+    if has('mac')
+        "let cmd = 'silent !open "' . a:filePath  . '"'
+        let cmd = 'open "' . a:filePath  . '"'
+    elseif has('win32') || has('win64') || has('win95') || has('win16')
+        "let cmd = '!cmd /c start "' . a:filePath . '"'
+        let cmd = '/c start "' . a:filePath . '"'
+    endif
+    "execute cmd
+    call system(cmd)
+endfunction
+
+"@param {String} content
+function! s:WriteToFileAndOpen(content)
+    let tempFile = tempname() . '.html'
+    let contentList = split(a:content, '\n', '')
+    call writefile(contentList, tempFile, '')
+    call s:OpenFile(tempFile)
+endfunction
+
+
 "@param {String} content
 "@return {String}
 function! s:ExtractTitle (content)
@@ -104,7 +127,8 @@ function! s:GetListItem (url, ordered)
     if !empty(title)
         return s:CreateListItem(title, fullUrl, a:ordered)
     endif
-    echomsg 'Can not find title at ' . fullUrl . ': ' . content
+    call s:WriteToFileAndOpen(content)
+    echomsg 'Can not find title at ' . fullUrl
 endfun
 
 
