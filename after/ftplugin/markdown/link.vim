@@ -74,29 +74,40 @@ function! s:CreateLink (url)
 endfun
 
 
-function! s:InsertLink(url)
-    let http = s:Httplize(a:url)
-    let line = s:CreateLink(http)
-    if !empty(line)
-        call append('.', line)
-    endif
-endfun
 
 function! s:UpdateCurrentLine()
     let line = getline('.')
-    let url = matchstr(line, '\/[a-zA-Z]\+-[0-9]\+')
-    let url = strpart(url, 1)
+    let url = matchstr(line, 'https\?:\/\/[a-zA-Z0-9%#\-.\/]\+')
     if empty(url)
-        echomsg "Can't find jira on this line!"
+        let url = matchstr(line, 'www.[a-zA-Z0-9%#\-.\/]\+')
+        if !empty(url)
+            let url = s:Httplize(url)
+        endif
+    endif
+    if empty(url)
+        echomsg "Can't find valid url on this line!"
         return
     endif
-    let new_line = s:CreateLink(url)
-    if !empty(new_line)
-        call setline('.', new_line)
+    let markdownLink = s:CreateLink(url)
+    if !empty(markdownLink)
+        let index = stridx(line, '1. ', 0)
+        if index > -1
+            let line = strpart(line, 0, index + strlen('1. '))
+            let line = line . markdownLink
+        else
+            let index = stridx(line, '* ', 0)
+            if index > - 1
+                let line = strpart(line, 0, index + strlen('* '))
+                let line = line . markdownLink
+            else
+                let line = '1. ' . markdownLink
+            endif
+        endif
+
+        call setline('.', line)
     endif
 endfun
 
-command! -nargs=1 InsertLink call s:InsertLink('<args>')
 command! -range UpdateLink <line1>,<line2>call s:UpdateCurrentLine()
 
 let &cpo = s:save_cpo
