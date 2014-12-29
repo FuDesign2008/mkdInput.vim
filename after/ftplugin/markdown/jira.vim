@@ -176,8 +176,8 @@ function! s:UpdateCurrentLine()
     endif
 endfun
 
-command! -nargs=* OlJira call s:InsertJiraAsOrderedList('<args>')
-command! -nargs=* UlJira call s:InsertJiraAsUnorderedList('<args>')
+command! -nargs=1 OlJira call s:InsertJiraAsOrderedList(<f-args>)
+command! -nargs=1 UlJira call s:InsertJiraAsUnorderedList(<f-args>)
 command! -range UpdateJira <line1>,<line2>call s:UpdateCurrentLine()
 
 let &cpo = s:save_cpo
