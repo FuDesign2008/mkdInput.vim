@@ -10,9 +10,9 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 
-if exists('s:mkdInput_title')
-    finish
-endif
+"if exists('s:mkdInput_title')
+    "finish
+"endif
 
 let s:mkdInput_title = 1
 
@@ -63,7 +63,7 @@ function! s:DownloadAndGetTitle(url, isJira)
     let html = ''
     let title = ''
 
-    if isJira
+    if a:isJira
         if !exists('g:jira_username')
             let path = expand('~/jira.vim')
             if filereadable(path)
@@ -145,11 +145,16 @@ def getJiraTitle(html):
     return title
 
 isJira = vim.eval('a:isJira')
-html = downloadFile('a:url')
+url = vim.eval('a:url')
+html = ""
 
 if isJira:
+    userName = vim.eval('g:jira_username')
+    password = vim.eval('g:jira_password')
+    html = downloadFile(url, userName, password)
     title = getJiraTitle(html)
 else:
+    html = downloadFile(url)
     title = getTitle(html)
 
 title = title.strip()
@@ -190,9 +195,10 @@ function! s:GetListItem (url, ordered)
         return
     endif
 
-    let title = s:DownloadAndGetTitle(fullUrl)
+    let title = s:DownloadAndGetTitle(fullUrl, 1)
     if strlen(title)
-        call s:CreateListItem(title, fullUrl, a:ordered)
+        let lineContent = s:CreateListItem(title, fullUrl, a:ordered)
+        call setline('.', lineContent)
     else
         echomsg "Failed to get title of page!"
     endif
@@ -206,7 +212,7 @@ function! s:CreateLink (url)
         return ''
     endif
 
-    let title = s:DownloadAndGetTitle(a:url)
+    let title = s:DownloadAndGetTitle(a:url, 0)
     if strlen(title)
         return '[' . title . '](' . a:url . ')'
     endif
