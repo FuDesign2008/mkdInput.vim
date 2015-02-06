@@ -2,17 +2,17 @@
 " insert jira content into markdown as a list item with link
 "
 
-"if &cp || exists('b:mkdInput_title')
-    "finish
-"endif
+if &cp || exists('b:mkdInput_title')
+    finish
+endif
 let b:mkdInput_title = 1
 let s:save_cpo = &cpo
 set cpo&vim
 
 
-"if exists('s:mkdInput_title')
-    "finish
-"endif
+if exists('s:mkdInput_title')
+    finish
+endif
 
 let s:mkdInput_title = 1
 
@@ -69,7 +69,7 @@ function! s:DownloadAndGetTitle(url, isJira)
             if filereadable(path)
                 exec ':so ' . path
             else
-                echomsg "~/jira.vim does not exists!"
+                echomsg "~/jira.vim does not exists or is not readable!"
                 return ''
             endif
         endif
@@ -144,7 +144,8 @@ def getJiraTitle(html):
     title = reEnd.sub('', title)
     return title
 
-isJira = vim.eval('a:isJira')
+isJiraStr = vim.eval('a:isJira')
+isJira = isJiraStr == "1"
 url = vim.eval('a:url')
 html = ""
 
