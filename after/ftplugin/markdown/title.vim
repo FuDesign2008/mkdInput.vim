@@ -239,9 +239,11 @@ endfun
 
 function! s:UpdateLink()
     let line = getline('.')
-    let url = matchstr(line, 'https\?:\/\/[a-zA-Z0-9%#\-.\/]\+')
+    " javascript reg
+    " var URI_REG = /^(https?:\/\/|www\.|ssh:\/\/|ftp:\/\/)[a-z0-9&_+\-\?\/\.=\#,:]+$/i
+    let url = matchstr(line, 'https\?:\/\/[a-zA-Z0-9%#&_?=,:+\-.\/]\+')
     if empty(url)
-        let url = matchstr(line, 'www.[a-zA-Z0-9%#\-.\/]\+')
+        let url = matchstr(line, 'www.[a-zA-Z0-9%#&_?=,:+\-.\/]\+')
         if !empty(url)
             let url = s:Httplize(url)
         endif
