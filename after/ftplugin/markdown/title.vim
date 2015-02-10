@@ -111,17 +111,27 @@ def downloadFile(url="", userName="", password=""):
     if url == "":
         return ""
 
-    TIMEOUT = 20
     responese = ""
+    errorMsg = ""
 
     if userName and password:
         request = urllib2.Request(url)
         authStr = "%s:%s" % (userName, password)
         base64Str = base64.encodestring(authStr).replace('\n', '')
         request.add_header("Authorization", "Basic %s" % base64Str)
-        responese = urllib2.urlopen(request)
+        try:
+            responese = urllib2.urlopen(request)
+        except Exception, ex:
+            errorMsg = "error://There is a python error: %s" % ex
+
     else:
-        responese = urllib2.urlopen(url, None, TIMEOUT)
+        try:
+            responese = urllib2.urlopen(url)
+        except Exception, ex:
+            errorMsg = "error://There is a python error: %s" % ex
+
+    if errorMsg != "":
+        return errorMsg
 
     if responese == "":
         return ""
@@ -144,19 +154,23 @@ def getJiraTitle(html):
     title = reEnd.sub('', title)
     return title
 
+
 isJiraStr = vim.eval('a:isJira')
 isJira = isJiraStr == "1"
 url = vim.eval('a:url')
 html = ""
+title = ""
 
 if isJira:
     userName = vim.eval('g:jira_username')
     password = vim.eval('g:jira_password')
     html = downloadFile(url, userName, password)
-    title = getJiraTitle(html)
+    if html.find('error://') == -1 and html != "":
+        title = getJiraTitle(html)
 else:
     html = downloadFile(url)
-    title = getTitle(html)
+    if html.find('error://') == -1 and html != "":
+        title = getTitle(html)
 
 title = title.strip()
 
