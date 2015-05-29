@@ -80,6 +80,9 @@ function! s:DownloadAndGetTitle(url, isJira)
     endif
 
 python << EOF
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
 import vim
 import urllib2
 import base64
