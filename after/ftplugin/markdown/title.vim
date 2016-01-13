@@ -30,23 +30,25 @@ function! s:OpenFile(filePath)
 endfunction
 
 "@param {String} content
-function! s:WriteToFileAndOpen(content)
-    let tempFile = tempname() . '.html'
+function! s:WriteToFileAndOpen(content, url)
+    let tempFile = tempname() . '.txt'
+
+    let allContentList = ['The content of ' . a:url . ' : ']
     let contentList = split(a:content, '\n', '')
-    call writefile(contentList, tempFile, '')
+
+    call extend(allContentList, contentList)
+
+    call writefile(allContentList, tempFile, '')
     call s:OpenFile(tempFile)
 endfunction
 
 
 
-let s:so_jira_config = 0
 function! s:SoJiraConfigIfNeed()
 
-    if s:so_jira_config
+    if exists('g:jira_username') && exists('g:jira_password') && exists('g:jira_url_prefix')
         return
     endif
-
-    let s:so_jira_config = 1
 
     let path = expand('~/jira.vim')
     if filereadable(path)
@@ -59,6 +61,7 @@ function! s:SoJiraConfigIfNeed()
     if !exists('g:jira_username') || !exists('g:jira_password') || !exists('g:jira_url_prefix')
         echo "~/jira.vim is not valid"
     endif
+
 endfun
 
 
@@ -69,17 +72,8 @@ function! s:DownloadAndGetTitle(url, isJira)
     let title = ''
 
     if a:isJira
-        if !exists('g:jira_username')
-            let path = expand('~/jira.vim')
-            if filereadable(path)
-                exec ':so ' . path
-            else
-                echomsg "~/jira.vim does not exists or is not readable!"
-                return ''
-            endif
-        endif
+        call s:SoJiraConfigIfNeed()
         if !exists('g:jira_username') || !exists('g:jira_password')
-            echo "~/jira.vim is not valid"
             return ''
         endif
     endif
@@ -105,8 +99,7 @@ class TitleHTMLParser(HTMLParser):
 
     def handle_endtag(self, tag):
         if tag == "title":
-            self.titleStart = False
-            self.close()
+            self.reset()
 
     def handle_data(self, data):
         if self.titleStart:
@@ -151,18 +144,13 @@ def downloadFile(url="", userName="", password=""):
 
 def getTitle(html):
     parser = TitleHTMLParser()
-    parser.feed(html)
+
+    try:
+        parser.feed(html)
+    except:
+        pass
+
     return parser.titleStr
-
-
-def getJiraTitle(html):
-    title = getTitle(html)
-    reStart = re.compile(r"^\s*\[[#\w-]+\]\s*", re.IGNORECASE)
-    title = reStart.sub('', title)
-    reEnd = re.compile(r"\s+-\s+Youdao JIRA\s*$", re.IGNORECASE)
-    title = reEnd.sub('', title)
-    return title
-
 
 isJiraStr = vim.eval('a:isJira')
 isJira = isJiraStr == "1"
@@ -174,12 +162,11 @@ if isJira:
     userName = vim.eval('g:jira_username')
     password = vim.eval('g:jira_password')
     html = downloadFile(url, userName, password)
-    if html.find('error://') == -1 and html != "":
-        title = getJiraTitle(html)
 else:
     html = downloadFile(url)
-    if html.find('error://') == -1 and html != "":
-        title = getTitle(html)
+
+if html.find('error://') == -1 and html != "":
+    title = getTitle(html)
 
 title = title.strip()
 
@@ -193,7 +180,11 @@ else:
 EOF
 
     if strlen(title) < 1
-        call s:WriteToFileAndOpen(html)
+        call s:WriteToFileAndOpen(html, a:url)
+    endif
+
+    if a:isJira && exists('*JiraTitleFilter')
+        let title = JiraTitleFilter(title, a:url)
     endif
 
     return title
@@ -201,7 +192,7 @@ EOF
 endfunction
 
 
-function! s:ExtractUrlPattern(list, line, pattern, urlPrefix)
+function! s:ExtractUrlPattern(list, line, pattern, isJiraShort)
 
     let start = 0
     let str = matchstr(a:line, a:pattern, start)
@@ -212,22 +203,21 @@ function! s:ExtractUrlPattern(list, line, pattern, urlPrefix)
         let end = index + len
 
         let url = str
-        if a:urlPrefix
-            if a:urlPrefix === 'jira_url_prefix'
-                if !exists('g:jira_url_prefix')
-                    call s:SoJiraConfigIfNeed()
-                endif
-                if exists('g:jira_url_prefix')
-                    let url = g:jira_url_prefix . str
-                else
-                    break
-                endif
+
+        if a:isJiraShort
+            call s:SoJiraConfigIfNeed()
+            if exists('g:jira_url_prefix')
+                let url = g:jira_url_prefix . str
             else
-                let url = a:urlPrefix . str
+                break
             endif
         endif
 
-        call add(matchList, {'start': index, 'str': str, 'end': end, 'url': str})
+        if stridx(url, 'www') == 0
+            let url = 'http://' . url
+        endif
+
+        call add(a:list, {'start': index, 'str': str, 'end': end, 'url': url})
 
         let start = end
         let str = matchstr(a:line, a:pattern, start)
@@ -244,13 +234,13 @@ function! s:ExtractJiraUrl(line)
     let shortPattern = '[a-zA-Z]\+-[0-9]\+'
     let matchList = []
 
-    call s:ExtractUrlPattern(matchList, a:line, pattern, '')
+    call s:ExtractUrlPattern(matchList, a:line, pattern, 0)
 
     if len(matchList) > 0
         return matchList
     endif
 
-    call s:ExtractUrlPattern(matchList, a:line, shortPattern, 'jira_url_prefix')
+    call s:ExtractUrlPattern(matchList, a:line, shortPattern, 1)
 
     return matchList
 endfun
@@ -261,12 +251,10 @@ function! s:ExtractUrl(line)
 
     " javascript reg
     " var URI_REG = /^(https?:\/\/|www\.|ssh:\/\/|ftp:\/\/)[a-z0-9&_+\-\?\/\.=\#,:]+$/i
-    let pattern = 'https\?:\/\/[a-zA-Z0-9%#&_?=,:+\-.\/]\+'
-    let wwwPattern = 'www.[a-zA-Z0-9%#&_?=,:+\-.\/]\+'
+    let pattern = '\(https\?:\/\/\|www\)[a-zA-Z0-9%#&_?=,:+\-.\/]\+'
     let matchList = []
 
-    call s:ExtractUrlPattern(matchList, a:line, pattern, '')
-    call s:ExtractUrlPattern(matchList, a:line, wwwPattern, 'http://')
+    call s:ExtractUrlPattern(matchList, a:line, pattern, 0)
 
     return matchList
 endfun
@@ -276,15 +264,16 @@ endfun
 "@return {String}
 function! s:UpdateUrlForLine(urlInfo, line)
     let title = a:urlInfo.title
+    let newLine = a:line
 
     if len(title) > 1
-        let before = strpart(line, 0, a:urlInfo.start)
-        let after = strpart(line, a:urlInfo.end)
+        let before = strpart(newLine, 0, a:urlInfo.start)
+        let after = strpart(newLine, a:urlInfo.end)
         let middle = '[' . title  . '](' . a:urlInfo.url .')'
-        let line = before . middle . after
+        let newLine = before . middle . after
     endif
 
-    return line
+    return newLine
 endfun
 
 "@param {List} urlList
@@ -292,14 +281,15 @@ endfun
 "@return {String}
 function! s:UpdateUrlListForLine(urlList, line)
     let index = len(a:urlList) - 1
+    let newLine = a:line
 
     while index >= 0
         let urlInfo = a:urlList[index]
-        line = call s:UpdateUrlForLine(urlInfo, line)
+        let newLine = s:UpdateUrlForLine(urlInfo, newLine)
         let index = index - 1
     endwhile
 
-    return line
+    return newLine
 endfun
 
 function! s:UpdateJira()
@@ -312,7 +302,7 @@ function! s:UpdateJira()
     endif
 
     for urlItem in urlList
-        let title = DownloadAndGetTitle(urlItem.url, 0)
+        let title = s:DownloadAndGetTitle(urlItem.url, 1)
         let urlItem.title = title
     endfor
 
@@ -326,7 +316,7 @@ endfun
 
 function! s:UpdateLink()
     let line = getline('.')
-    let urlList = s:extractUrl(line)
+    let urlList = s:ExtractUrl(line)
 
     if empty(urlList)
         echomsg "Can't find valid url on this line!"
@@ -334,7 +324,7 @@ function! s:UpdateLink()
     endif
 
     for urlItem in urlList
-        let title = DownloadAndGetTitle(urlItem.url, 0)
+        let title = s:DownloadAndGetTitle(urlItem.url, 0)
         let urlItem.title = title
     endfor
 
