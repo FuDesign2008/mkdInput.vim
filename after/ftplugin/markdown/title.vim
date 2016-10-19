@@ -54,12 +54,12 @@ function! s:SoJiraConfigIfNeed()
     if filereadable(path)
         exec ':so ' . path
     else
-        echomsg "~/jira.vim does not exists or is not readable!"
+        echomsg '~/jira.vim does not exists or is not readable!'
         return
     endif
 
     if !exists('g:jira_username') || !exists('g:jira_password') || !exists('g:jira_url_prefix')
-        echo "~/jira.vim is not valid"
+        echo '~/jira.vim is not valid'
     endif
 
 endfun
