@@ -78,15 +78,15 @@ function! s:DownloadAndGetTitle(url, isJira)
         endif
     endif
 
-python << EOF
-import sys
-reload(sys)
-sys.setdefaultencoding('utf-8')
+py3 << EOF
+# import sys
+# reload(sys)
+# sys.setdefaultencoding('utf-8')
 import vim
-import urllib2
+import urllib.request as urllib2
 import base64
-from HTMLParser import HTMLParser
-import re
+from html.parser import HTMLParser
+# import re
 
 
 class TitleHTMLParser(HTMLParser):
@@ -123,13 +123,13 @@ def downloadFile(url="", userName="", password=""):
         request.add_header("Authorization", "Basic %s" % base64Str)
         try:
             responese = urllib2.urlopen(request)
-        except Exception, ex:
+        except Exception as ex:
             errorMsg = "error://There is a python error: %s" % ex
 
     else:
         try:
             responese = urllib2.urlopen(url)
-        except Exception, ex:
+        except Exception as ex:
             errorMsg = "error://There is a python error: %s" % ex
 
     if errorMsg != "":
@@ -138,7 +138,7 @@ def downloadFile(url="", userName="", password=""):
     if responese == "":
         return ""
 
-    html = responese.read()
+    html = responese.read().decode('utf-8')
     return html
 
 
@@ -147,10 +147,9 @@ def getTitle(html):
 
     try:
         parser.feed(html)
-    except:
-        pass
+    finally:
+        return parser.titleStr
 
-    return parser.titleStr
 
 isJiraStr = vim.eval('a:isJira')
 isJira = isJiraStr == "1"
@@ -172,11 +171,10 @@ title = title.strip()
 
 if len(title) < 1:
     html = html.replace("'", "''")
-    vim.command("let html='%s'" % html )
+    vim.command("let html='%s'" % html)
 else:
     title = title.replace("'", "''")
-    vim.command("let title='%s'" % title )
-
+    vim.command("let title='%s'" % title)
 EOF
 
     if strlen(title) < 1

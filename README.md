@@ -1,9 +1,8 @@
-mkdInput.vim
-============
+# mkdInput.vim
 
 Get url title and input as markdown format.
 
-This plugin needs python support.
+This plugin needs `python3` support.
 
 ## Usage
 
@@ -12,9 +11,7 @@ This plugin needs python support.
 
 ![example](./mkd-input-example.gif)
 
-
-##  `~/jira.vim`
-
+## `~/jira.vim`
 
 ```vimscript
 
@@ -41,21 +38,12 @@ function! JiraTitleFilter(title, url)
     return filteredTitle
 endfunction
 
-
-
 ```
-
-
-
-
-
 
 ## chang log
 
-* 2016-01-13
-    - Add support for multiple urls in one line
-    - Better performance
-
-
-
-
+-   2019-05-05
+    -   Change support from `python` to `python3`
+-   2016-01-13
+    -   Add support for multiple urls in one line
+    -   Better performance
