@@ -2,53 +2,32 @@
 " insert jira content into markdown as a list item with link
 "
 
-if &cp || exists('b:mkdInput_title')
-    finish
-endif
-let b:mkdInput_title = 1
-let s:save_cpo = &cpo
-set cpo&vim
+let s:isTesting = 0
+
+if !s:isTesting
+    if &compatible || exists('b:mkdInput_title')
+        finish
+    endif
+    let b:mkdInput_title = 1
+    let s:save_cpo = &cpoptions
+    set cpoptions&vim
 
 
-if exists('s:mkdInput_title')
-    finish
+    if exists('s:mkdInput_title')
+        finish
+    endif
 endif
+
 
 let s:mkdInput_title = 1
-
-"@param {String} fielPath
-function! s:OpenFile(filePath)
-    if has('mac')
-        "let cmd = 'silent !open "' . a:filePath  . '"'
-        let cmd = 'open "' . a:filePath  . '"'
-    elseif has('win32') || has('win64') || has('win95') || has('win16')
-        "let cmd = '!cmd /c start "' . a:filePath . '"'
-        let cmd = '/c start "' . a:filePath . '"'
-    endif
-    "execute cmd
-    call system(cmd)
-endfunction
-
-"@param {String} content
-function! s:WriteToFileAndOpen(content, url)
-    let tempFile = tempname() . '.txt'
-
-    let allContentList = ['The content of ' . a:url . ' : ']
-    let contentList = split(a:content, '\n', '')
-
-    call extend(allContentList, contentList)
-
-    call writefile(allContentList, tempFile, '')
-    call s:OpenFile(tempFile)
-endfunction
-
+let s:generalEndToken =  '/>'
+let s:jiraCookieFile = tempname()
 
 
 function! s:SoJiraConfigIfNeed()
-
-    if exists('g:jira_username') && exists('g:jira_password') && exists('g:jira_url_prefix')
-        return
-    endif
+    " if exists('g:jira_username') && exists('g:jira_password') && exists('g:jira_url_prefix')
+        " return
+    " endif
 
     let path = expand('~/jira.vim')
     if filereadable(path)
@@ -64,130 +43,289 @@ function! s:SoJiraConfigIfNeed()
 
 endfun
 
+" @return {Node}
+" Node properties:
+"  * name {String} tag name
+"  * [attrs] {Array<AttributeNode>} optional
+"  * [innerContent] {String} optional
+"  * startIndex {Integer} start index in original html
+"  * endIndex {Integer}  end index in original html
+"
+function! s:ParseNode(tagname, html, startToken, endToken)
+    " echo 'ParseNode -----'
+    " echo 'html: ' . a:html
+    " echo 'tagname: ' . a:tagname
+    " echo 'startToken: ' . a:startToken
+    " echo 'endToken: ' . a:endToken
 
-" @param {String} url
-" @return {String}
-function! s:DownloadAndGetTitle(url, isJira)
-    let html = ''
-    let title = ''
+    let node = {}
+    let node['name'] = a:tagname
+    let attributes = {}
 
-    if a:isJira
-        call s:SoJiraConfigIfNeed()
-        if !exists('g:jira_username') || !exists('g:jira_password')
-            return ''
+    let startTokenLen = strlen(a:startToken)
+    let startTokenIndex = stridx(a:html, a:startToken, 0)
+    " echomsg 'startTokenIndex: ' .startTokenIndex
+
+    let htmlWithAttrs = ''
+
+     " <tagname>xxx</tagname>
+    if stridx(a:startToken, '>') > -1
+        let htmlWithAttrs = ''
+        let needleStart = startTokenIndex + startTokenLen
+        let endTokenIndex = stridx(a:html, a:endToken, needleStart)
+        if endTokenIndex > -1
+            let innerContentLength = endTokenIndex - needleStart
+            let innerContent = strpart(a:html, needleStart, innerContentLength)
+            let node['innerContent'] = innerContent
         endif
+    else
+        let attrStartIndex = startTokenIndex + startTokenLen
+        let attrEndIndex = -1
+        " <tagname abc />
+        if a:endToken == s:generalEndToken
+            let endTokenIndex = stridx(a:html, a:endToken, attrStartIndex)
+        else
+            " <tagname abc > xxxx </tagname>
+            let endMark = '>'
+            let attrEndIndex = stridx(a:html, endMark, attrStartIndex)
+            if attrEndIndex > -1
+                let needleStart = attrEndIndex + strlen(endMark)
+                let endTokenIndex = stridx(a:html, a:endToken, needleStart)
+                if endTokenIndex > -1
+                    let innerContentLength = endTokenIndex - needleStart
+                    let innerContent = strpart(a:html, needleStart, innerContentLength)
+                    let node['innerContent'] = innerContent
+                endif
+            endif
+        endif
+
+        let htmlWithAttrs = strpart(a:html, attrStartIndex, attrEndIndex - attrStartIndex)
     endif
 
-py3 << EOF
-# import sys
-# reload(sys)
-# sys.setdefaultencoding('utf-8')
-import vim
-import urllib.request as urllib2
-import base64
-from html.parser import HTMLParser
-# import re
-
-
-class TitleHTMLParser(HTMLParser):
-    titleStart = False
-    titleStr = ""
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "title":
-            self.titleStart = True
-
-    def handle_endtag(self, tag):
-        if tag == "title":
-            self.reset()
-
-    def handle_data(self, data):
-        if self.titleStart:
-            self.titleStr += data
-
-
-# @param {String} url
-# @return {String}
-def downloadFile(url="", userName="", password=""):
-
-    if url == "":
-        return ""
-
-    responese = ""
-    errorMsg = ""
-
-    if userName and password:
-        request = urllib2.Request(url)
-        authStr = "%s:%s" % (userName, password)
-        base64Str = base64.encodestring(authStr).replace('\n', '')
-        request.add_header("Authorization", "Basic %s" % base64Str)
-        try:
-            responese = urllib2.urlopen(request)
-        except Exception as ex:
-            errorMsg = "error://There is a python error: %s" % ex
-
-    else:
-        try:
-            responese = urllib2.urlopen(url)
-        except Exception as ex:
-            errorMsg = "error://There is a python error: %s" % ex
-
-    if errorMsg != "":
-        return errorMsg
-
-    if responese == "":
-        return ""
-
-    html = responese.read().decode('utf-8')
-    return html
-
-
-def getTitle(html):
-    parser = TitleHTMLParser()
-
-    try:
-        parser.feed(html)
-    finally:
-        return parser.titleStr
-
-
-isJiraStr = vim.eval('a:isJira')
-isJira = isJiraStr == "1"
-url = vim.eval('a:url')
-html = ""
-title = ""
-
-if isJira:
-    userName = vim.eval('g:jira_username')
-    password = vim.eval('g:jira_password')
-    html = downloadFile(url, userName, password)
-else:
-    html = downloadFile(url)
-
-if html.find('error://') == -1 and html != "":
-    title = getTitle(html)
-
-title = title.strip()
-
-if len(title) < 1:
-    html = html.replace("'", "''")
-    vim.command("let html='%s'" % html)
-else:
-    title = title.replace("'", "''")
-    vim.command("let title='%s'" % title)
-EOF
-
-    if strlen(title) < 1
-        call s:WriteToFileAndOpen(html, a:url)
+    if !empty(htmlWithAttrs)
+        let node['attrs'] = htmlWithAttrs
     endif
 
-    if a:isJira && exists('*JiraTitleFilter')
+    return node
+endfunction
+
+
+
+" @return {Array<Node>}
+function! s:ParseTag(tagname, html)
+    let startToken = '<' . a:tagname
+    let startTokenWithClose = startToken . '>'
+    let startTokenWithSpace = startToken . ' '
+    let startTokenWithEndLine  = startToken . '\n'
+    let realStartToken = ''
+    let endToken = '</' . a:tagname .'>'
+    let realEndToken = ''
+
+    let needleIndex = 0
+    let len = strlen(a:html)
+    let nodeList = []
+
+    while needleIndex < len
+        let startIndex = stridx(a:html, startTokenWithClose, needleIndex)
+        let realStartToken = startTokenWithClose
+
+        if startIndex == -1
+            let startIndex = stridx(a:html, startTokenWithSpace, needleIndex)
+            " echomsg 'startTokenWithSpace: ' . startTokenWithSpace
+            let realStartToken = startTokenWithSpace
+        endif
+
+        if startIndex == -1
+            " echomsg 'startTokenWithEndLine: ' .startTokenWithEndLine
+            let startIndex = stridx(a:html, startTokenWithEndLine, needleIndex)
+            let realStartToken = startTokenWithEndLine
+        endif
+
+        if startIndex > -1
+            let nearstEndTokenIndex = stridx(a:html, endToken, startIndex)
+            let nearstGeneralEndTokenIndex = stridx(a:html, s:generalEndToken, startIndex)
+            let endIndex = -1
+            let endTokenIndex = -1
+            if nearstEndTokenIndex > -1 && nearstGeneralEndTokenIndex > -1
+                let indexList = [nearstEndTokenIndex, nearstGeneralEndTokenIndex]
+                let endTokenIndex = min(indexList)
+                if endTokenIndex == nearstGeneralEndTokenIndex
+                    let realEndToken = s:generalEndToken
+                else
+                    let realEndToken = endToken
+                endif
+            elseif nearstEndTokenIndex > -1
+                let endTokenIndex = nearstEndTokenIndex
+                let realEndToken = endToken
+            elseif nearstGeneralEndTokenIndex > -1
+                let endTokenIndex = nearstGeneralEndTokenIndex
+                let realEndToken = s:generalEndToken
+            else
+                echoerr 'Can not find end token for ' . startToken
+            endif
+            if endTokenIndex > -1
+                let node = s:ParseNode(a:tagname, a:html, realStartToken, realEndToken)
+                let endIndex = endTokenIndex + strlen(realEndToken)
+                if !empty(node)
+                    let node['startIndex'] = startIndex
+                    let node['endIndex'] = endIndex
+                    call add(nodeList, node)
+                endif
+                let needleIndex = endIndex
+            else
+                let needleIndex = len
+            endif
+
+        else
+            let needleIndex = len
+        endif
+    endwhile
+
+    return nodeList
+endfunction
+
+function! s:BuildCurlCommandJira(url, userName, password, isLogin)
+    if !executable('curl')
+        return ''
+    endif
+    let loginUrl = '"' . g:jira_url_prefix . 'login.jsp"'
+    let loginData =  "--data 'os_username=" . a:userName . '&os_password='. a:password ."&os_destination=&user_role=&atl_token=&login=Log+In'"
+
+    let wrappedUrl = '"' . a:url . '"'
+    let theUrl = a:isLogin ? loginUrl : wrappedUrl
+    let theData = a:isLogin ? loginData : ''
+
+    let cookies =  '--cookie "' . s:jiraCookieFile .'" --cookie-jar "' . s:jiraCookieFile . '"'
+
+    let textList = [ 'curl',
+                \ theUrl,
+                \ "-H 'Connection: keep-alive'",
+                \ "-H 'Pragma: no-cache'",
+                \ "-H 'Cache-Control: no-cache'",
+                \ "-H 'Origin: http://jira.corp.youdao.com'",
+                \ "-H 'Upgrade-Insecure-Requests: 1'",
+                \ "-H 'Content-Type: application/x-www-form-urlencoded'",
+                \ "-H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Safari/537.36'",
+                \ "-H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3'",
+                \ "-H 'Referer: http://jira.corp.youdao.com/login.jsp'",
+                \ "-H 'Accept-Encoding: gzip, deflate'",
+                \ "-H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-TW;q=0.7,zh-CN;q=0.6,und;q=0.5'",
+                \ theData,
+                \ cookies,
+                \ '--compressed'
+                \]
+
+    let text = join(textList, ' ')
+    return text
+endfunction
+
+function! s:BuildDownloadCommandJira(url, isLogin)
+    call s:SoJiraConfigIfNeed()
+    if !exists('g:jira_username') || !exists('g:jira_password')
+        return ''
+    endif
+    let userName = g:jira_username
+    let password = g:jira_password
+
+    let command = s:BuildCurlCommandJira(a:url, userName, password, a:isLogin)
+    " TODO if curl is not support, can create others
+    return command
+endfunction
+
+function! s:BuildCurlCommand(url)
+    if !executable('curl')
+        return ''
+    endif
+
+    let wrappedUrl = '"' . a:url . '"'
+    let theUrl =  wrappedUrl
+    let theData = ''
+    let cookies =  ''
+
+    let textList = [ 'curl',
+                \ theUrl,
+                \ "-H 'Connection: keep-alive'",
+                \ "-H 'Pragma: no-cache'",
+                \ "-H 'Cache-Control: no-cache'",
+                \ "-H 'Upgrade-Insecure-Requests: 1'",
+                \ "-H 'Content-Type: application/x-www-form-urlencoded'",
+                \ "-H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Safari/537.36'",
+                \ "-H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3'",
+                \ "-H 'Accept-Encoding: gzip, deflate'",
+                \ "-H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-TW;q=0.7,zh-CN;q=0.6,und;q=0.5'",
+                \ theData,
+                \ cookies,
+                \ '--compressed'
+                \]
+
+    let text = join(textList, ' ')
+    return text
+endfunction
+
+
+function! s:BuildDownloadCommand(url)
+    let command = s:BuildCurlCommand(a:url)
+    " TODO if curl is not support, can create others
+    return command
+endfunction
+
+function! s:ExtractTitle(html)
+    let titleNodeList = s:ParseTag('title', a:html)
+    " echo 'string : ' . strpart(a:html, 0, 1200)
+    " echo 'titleNodeList'
+    " echo titleNodeList
+    if empty(titleNodeList)
+        return ''
+    endif
+
+    let titleNode = get(titleNodeList, 0)
+    if empty(titleNode)
+        return ''
+    endif
+
+    let title = get(titleNode, 'innerContent', '')
+    return title
+endfunction
+
+function! s:DownloadAndGetTitleJira(url)
+    let command = s:BuildDownloadCommandJira(a:url, 0)
+    let responseText = system(command)
+    let title = s:ExtractTitle(responseText)
+
+    if empty(title) || stridx(title, '403') > -1 || stridx(title, 'Forbidden') > -1
+        let loginCommand = s:BuildDownloadCommandJira(a:url, 1)
+        call system(loginCommand)
+        let responseText = system(command)
+        let title = s:ExtractTitle(responseText)
+    endif
+
+    if exists('*JiraTitleFilter')
         let title = JiraTitleFilter(title, a:url)
     endif
 
     return title
-
 endfunction
+
+function! s:DownloadAndGetTitle(url)
+    let command = s:BuildDownloadCommand(a:url)
+    let responseText = system(command)
+    let title = s:ExtractTitle(responseText)
+    return title
+endfunction
+
+" @return {String}
+function! s:GetTitleRemote(url, isJira)
+    let title = ''
+
+    if a:isJira
+        let title = s:DownloadAndGetTitleJira(a:url)
+    else
+        let title = s:DownloadAndGetTitle(a:url)
+    endif
+
+    return title
+endfunction
+
 
 
 function! s:ExtractUrlPattern(list, line, pattern, isJiraShort)
@@ -205,7 +343,7 @@ function! s:ExtractUrlPattern(list, line, pattern, isJiraShort)
         if a:isJiraShort
             call s:SoJiraConfigIfNeed()
             if exists('g:jira_url_prefix')
-                let url = g:jira_url_prefix . str
+                let url = g:jira_url_prefix . 'browse/' . str
             else
                 break
             endif
@@ -300,7 +438,7 @@ function! s:UpdateJira()
     endif
 
     for urlItem in urlList
-        let title = s:DownloadAndGetTitle(urlItem.url, 1)
+        let title = s:GetTitleRemote(urlItem.url, 1)
         let urlItem.title = title
     endfor
 
@@ -322,7 +460,7 @@ function! s:UpdateLink()
     endif
 
     for urlItem in urlList
-        let title = s:DownloadAndGetTitle(urlItem.url, 0)
+        let title = s:GetTitleRemote(urlItem.url, 0)
         let urlItem.title = title
     endfor
 
@@ -336,5 +474,17 @@ endfun
 command! -range UpdateJira <line1>,<line2>call s:UpdateJira()
 command! -range UpdateLink <line1>,<line2>call s:UpdateLink()
 
-let &cpo = s:save_cpo
+if !s:isTesting
+    let &cpoptions = s:save_cpo
+endif
+
+if s:isTesting
+    let testingUrl = 'http://jira.corp.youdao.com/browse/HWWEB-464'
+    let title = s:GetTitleRemote(testingUrl, 1)
+    echo 'title: |' . title . '|'
+
+    let testingUrl = 'https://www.huxiu.com/article/300899.html'
+    let title = s:GetTitleRemote(testingUrl, 0)
+    echo 'title: |' . title . '|'
+endif
 

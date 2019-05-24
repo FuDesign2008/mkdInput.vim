@@ -2,7 +2,7 @@
 
 Get url title and input as markdown format.
 
-This plugin needs `python3` support.
+This plugin needs `curl` support.
 
 ## Usage
 
@@ -42,8 +42,10 @@ endfunction
 
 ## chang log
 
+-   2019-05-24
+    -   Use `curl` to download file, `python` is not need
 -   2019-05-05
-    -   Change support from `python` to `python3`
+    -   Change dependence from `python` to `python3`
 -   2016-01-13
     -   Add support for multiple urls in one line
     -   Better performance
