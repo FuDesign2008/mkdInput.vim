@@ -323,6 +323,8 @@ function! s:GetTitleRemote(url, isJira)
         let title = s:DownloadAndGetTitle(a:url)
     endif
 
+    let title = trim(title)
+
     return title
 endfunction
 
