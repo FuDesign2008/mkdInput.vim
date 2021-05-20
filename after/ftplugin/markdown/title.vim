@@ -59,7 +59,7 @@ function! s:BuildCurlCommandJira(url, userName, password, isLogin)
 
     let textList = [ 'curl',
                 \ theUrl,
-                \ '--max-time 3',
+                \ '--max-time 15',
                 \ "-H 'Connection: keep-alive'",
                 \ "-H 'Pragma: no-cache'",
                 \ "-H 'Cache-Control: no-cache'",
@@ -105,7 +105,7 @@ function! s:BuildCurlCommand(url)
 
     let textList = [ 'curl',
                 \ theUrl,
-                \ '--max-time 3',
+                \ '--max-time 15',
                 \ '-L --max-redirs 3',
                 \ "-H 'Connection: keep-alive'",
                 \ "-H 'Pragma: no-cache'",
