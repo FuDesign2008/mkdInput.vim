@@ -279,12 +279,13 @@ endfunction
 " 标题书写在 <meta /> 标签中
 "
 " https://mp.weixin.qq.com/s/wTVbioBftHVs1Z_4FIDFmw
-" <meta property="og:title" content="数据可视化探索之 SpreadJS">
+"   <meta property="og:title" content="xxxx" />
+"
 " @param {string} html
 " @return {string}
 function! s:ExtractTitleForWeChat(html)
     let startFlag = '<meta property="og:title" content="'
-    let endFlag = '">'
+    let endFlag = '" />'
 
     let startIndex = stridx(a:html, startFlag)
     if startIndex == -1
