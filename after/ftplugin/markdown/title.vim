@@ -171,8 +171,8 @@ endfunction
 "@param {string[]} htmlLines
 "@return {string}
 "
-function! s:ExtractTitleFromHtml(htmlLines) 
-    let htmlAsText = a:htmlLines.join('')
+function! s:ExtractTitleFromHtml(htmlLines)
+    let htmlAsText = join(a:htmlLines, '')
     let startOpen = '<title'
     let startClose = '>'
     let endOpen = '<'
