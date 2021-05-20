@@ -43,146 +43,6 @@ function! s:SoJiraConfigIfNeed()
 
 endfun
 
-" @return {Node}
-" Node properties:
-"  * name {String} tag name
-"  * [attrs] {Array<AttributeNode>} optional
-"  * [innerContent] {String} optional
-"  * startIndex {Integer} start index in original html
-"  * endIndex {Integer}  end index in original html
-"
-function! s:ParseNode(tagname, html, startToken, endToken)
-    " echo 'ParseNode -----'
-    " echo 'html: ' . a:html
-    " echo 'tagname: ' . a:tagname
-    " echo 'startToken: ' . a:startToken
-    " echo 'endToken: ' . a:endToken
-
-    let node = {}
-    let node['name'] = a:tagname
-    let attributes = {}
-
-    let startTokenLen = strlen(a:startToken)
-    let startTokenIndex = stridx(a:html, a:startToken, 0)
-    " echomsg 'startTokenIndex: ' .startTokenIndex
-
-    let htmlWithAttrs = ''
-
-     " <tagname>xxx</tagname>
-    if stridx(a:startToken, '>') > -1
-        let htmlWithAttrs = ''
-        let needleStart = startTokenIndex + startTokenLen
-        let endTokenIndex = stridx(a:html, a:endToken, needleStart)
-        if endTokenIndex > -1
-            let innerContentLength = endTokenIndex - needleStart
-            let innerContent = strpart(a:html, needleStart, innerContentLength)
-            let node['innerContent'] = innerContent
-        endif
-    else
-        let attrStartIndex = startTokenIndex + startTokenLen
-        let attrEndIndex = -1
-        " <tagname abc />
-        if a:endToken == s:generalEndToken
-            let endTokenIndex = stridx(a:html, a:endToken, attrStartIndex)
-        else
-            " <tagname abc > xxxx </tagname>
-            let endMark = '>'
-            let attrEndIndex = stridx(a:html, endMark, attrStartIndex)
-            if attrEndIndex > -1
-                let needleStart = attrEndIndex + strlen(endMark)
-                let endTokenIndex = stridx(a:html, a:endToken, needleStart)
-                if endTokenIndex > -1
-                    let innerContentLength = endTokenIndex - needleStart
-                    let innerContent = strpart(a:html, needleStart, innerContentLength)
-                    let node['innerContent'] = innerContent
-                endif
-            endif
-        endif
-
-        let htmlWithAttrs = strpart(a:html, attrStartIndex, attrEndIndex - attrStartIndex)
-    endif
-
-    if !empty(htmlWithAttrs)
-        let node['attrs'] = htmlWithAttrs
-    endif
-
-    return node
-endfunction
-
-
-
-" @return {Array<Node>}
-function! s:ParseTag(tagname, html)
-    let startToken = '<' . a:tagname
-    let startTokenWithClose = startToken . '>'
-    let startTokenWithSpace = startToken . ' '
-    let startTokenWithEndLine  = startToken . '\n'
-    let realStartToken = ''
-    let endToken = '</' . a:tagname .'>'
-    let realEndToken = ''
-
-    let needleIndex = 0
-    let len = strlen(a:html)
-    let nodeList = []
-
-    while needleIndex < len
-        let startIndex = stridx(a:html, startTokenWithClose, needleIndex)
-        let realStartToken = startTokenWithClose
-
-        if startIndex == -1
-            let startIndex = stridx(a:html, startTokenWithSpace, needleIndex)
-            " echomsg 'startTokenWithSpace: ' . startTokenWithSpace
-            let realStartToken = startTokenWithSpace
-        endif
-
-        if startIndex == -1
-            " echomsg 'startTokenWithEndLine: ' .startTokenWithEndLine
-            let startIndex = stridx(a:html, startTokenWithEndLine, needleIndex)
-            let realStartToken = startTokenWithEndLine
-        endif
-
-        if startIndex > -1
-            let nearstEndTokenIndex = stridx(a:html, endToken, startIndex)
-            let nearstGeneralEndTokenIndex = stridx(a:html, s:generalEndToken, startIndex)
-            let endIndex = -1
-            let endTokenIndex = -1
-            if nearstEndTokenIndex > -1 && nearstGeneralEndTokenIndex > -1
-                let indexList = [nearstEndTokenIndex, nearstGeneralEndTokenIndex]
-                let endTokenIndex = min(indexList)
-                if endTokenIndex == nearstGeneralEndTokenIndex
-                    let realEndToken = s:generalEndToken
-                else
-                    let realEndToken = endToken
-                endif
-            elseif nearstEndTokenIndex > -1
-                let endTokenIndex = nearstEndTokenIndex
-                let realEndToken = endToken
-            elseif nearstGeneralEndTokenIndex > -1
-                let endTokenIndex = nearstGeneralEndTokenIndex
-                let realEndToken = s:generalEndToken
-            else
-                echoerr 'Can not find end token for ' . startToken
-            endif
-            if endTokenIndex > -1
-                let node = s:ParseNode(a:tagname, a:html, realStartToken, realEndToken)
-                let endIndex = endTokenIndex + strlen(realEndToken)
-                if !empty(node)
-                    let node['startIndex'] = startIndex
-                    let node['endIndex'] = endIndex
-                    call add(nodeList, node)
-                endif
-                let needleIndex = endIndex
-            else
-                let needleIndex = len
-            endif
-
-        else
-            let needleIndex = len
-        endif
-    endwhile
-
-    return nodeList
-endfunction
 
 function! s:BuildCurlCommandJira(url, userName, password, isLogin)
     if !executable('curl')
@@ -281,67 +141,90 @@ endfunction
 " https://mp.weixin.qq.com/s/wTVbioBftHVs1Z_4FIDFmw
 "   <meta property="og:title" content="xxxx" />
 "
-" @param {string} html
+" @param {string[]} htmlLines
 " @return {string}
-function! s:ExtractTitleForWeChat(html)
+function! s:ExtractTitleForWeChat(htmlLines)
+    let htmlAsText = join(a:htmlLines, '')
+
     let startFlag = '<meta property="og:title" content="'
     let endFlag = '" />'
 
-    let startIndex = stridx(a:html, startFlag)
+    let startIndex = stridx(htmlAsText, startFlag)
     if startIndex == -1
         return ''
     endif
 
     let titleStartIndex = startIndex + strlen(startFlag)
-    let endIndex = stridx(a:html, endFlag, titleStartIndex)
+    let endIndex = stridx(htmlAsText, endFlag, titleStartIndex)
     if endIndex == -1
         return ''
     endif
 
     let titleLength = endIndex - titleStartIndex
-    let title = strpart(a:html, titleStartIndex, titleLength)
+    let title = strpart(htmlAsText, titleStartIndex, titleLength)
 
     return title
 endfunction
 
+" 使用正则匹配获取 title
+"
+"@param {string[]} htmlLines
+"@return {string}
+"
+function! s:ExtractTitleFromHtml(htmlLines) 
+    let htmlAsText = a:htmlLines.join('')
+    let startOpen = '<title'
+    let startClose = '>'
+    let endOpen = '<'
 
+    let startOpenIndex = stridx(htmlAsText, startOpen)
+    if startOpenIndex == -1
+        return ''
+    endif
+
+    let searchStart = startOpenIndex + strlen(startOpen)
+    let startCloseIndex = stridx(htmlAsText, startClose, searchStart)
+    if startCloseIndex == -1
+        return ''
+    endif
+
+    let titleStart = startCloseIndex + strlen(startClose)
+    let titleEnd = stridx(htmlAsText, endOpen, titleStart)
+    if titleEnd == -1
+        return ''
+    endif
+
+    let titleLength = titleEnd  - titleStart
+    let title = strpart(htmlAsText, titleStart, titleLength)
+    return title
+endfunction
+
+
+" @param {string[]} htmlLines
+" @param {string} url
 " @return {string}
 "
-function! s:ExtractTitle(html, url)
-
+function! s:ExtractTitle(htmlLines, url)
     let isFromWeChat = s:IsFromWeChat(a:url)
     if isFromWeChat
-        let title = s:ExtractTitleForWeChat(a:html)
+        let title = s:ExtractTitleForWeChat(a:htmlLines)
         return title
     endif
 
-    let titleNodeList = s:ParseTag('title', a:html)
-    " echo 'string : ' . strpart(a:html, 0, 1200)
-    " echo 'titleNodeList'
-    " echo titleNodeList
-    if empty(titleNodeList)
-        return ''
-    endif
-
-    let titleNode = get(titleNodeList, 0)
-    if empty(titleNode)
-        return ''
-    endif
-
-    let title = get(titleNode, 'innerContent', '')
+    let title = s:ExtractTitleFromHtml(a:htmlLines)
     return title
 endfunction
 
 function! s:DownloadAndGetTitleJira(url)
     let command = s:BuildDownloadCommandJira(a:url, 0)
-    let responseText = system(command)
-    let title = s:ExtractTitle(responseText, a:url)
+    let lines = systemlist(command)
+    let title = s:ExtractTitle(lines, a:url)
 
     if empty(title) || stridx(title, '403') > -1 || stridx(title, 'Forbidden') > -1
         let loginCommand = s:BuildDownloadCommandJira(a:url, 1)
         call system(loginCommand)
-        let responseText = system(command)
-        let title = s:ExtractTitle(responseText, a:url)
+        let lines = systemlist(command)
+        let title = s:ExtractTitle(lines, a:url)
     endif
 
     if exists('*JiraTitleFilter')
@@ -353,8 +236,8 @@ endfunction
 
 function! s:DownloadAndGetTitle(url)
     let command = s:BuildDownloadCommand(a:url)
-    let responseText = system(command)
-    let title = s:ExtractTitle(responseText, a:url)
+    let lines = systemlist(command)
+    let title = s:ExtractTitle(lines, a:url)
     return title
 endfunction
 
