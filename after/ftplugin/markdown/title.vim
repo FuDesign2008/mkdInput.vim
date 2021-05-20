@@ -271,7 +271,49 @@ function! s:BuildDownloadCommand(url)
     return command
 endfunction
 
-function! s:ExtractTitle(html)
+function! s:IsFromWeChat(url)
+    return stridx(a:url, 'https://mp.weixin.qq.com/') > -1
+endfunction
+
+" 微信公众号平台的原始html中， <title/> 为空
+" 标题书写在 <meta /> 标签中
+"
+" https://mp.weixin.qq.com/s/wTVbioBftHVs1Z_4FIDFmw
+" <meta property="og:title" content="数据可视化探索之 SpreadJS">
+" @param {string} html
+" @return {string}
+function! s:ExtractTitleForWeChat(html)
+    let startFlag = '<meta property="og:title" content="'
+    let endFlag = '">'
+
+    let startIndex = stridx(a:html, startFlag)
+    if startIndex == -1
+        return ''
+    endif
+
+    let titleStartIndex = startIndex + strlen(startFlag)
+    let endIndex = stridx(a:html, endFlag, titleStartIndex)
+    if endIndex == -1
+        return ''
+    endif
+
+    let titleLength = endIndex - titleStartIndex
+    let title = strpart(a:html, titleStartIndex, titleLength)
+
+    return title
+endfunction
+
+
+" @return {string}
+"
+function! s:ExtractTitle(html, url)
+
+    let isFromWeChat = s:IsFromWeChat(a:url)
+    if isFromWeChat
+        let title = s:ExtractTitleForWeChat(a:html)
+        return title
+    endif
+
     let titleNodeList = s:ParseTag('title', a:html)
     " echo 'string : ' . strpart(a:html, 0, 1200)
     " echo 'titleNodeList'
@@ -292,13 +334,13 @@ endfunction
 function! s:DownloadAndGetTitleJira(url)
     let command = s:BuildDownloadCommandJira(a:url, 0)
     let responseText = system(command)
-    let title = s:ExtractTitle(responseText)
+    let title = s:ExtractTitle(responseText, a:url)
 
     if empty(title) || stridx(title, '403') > -1 || stridx(title, 'Forbidden') > -1
         let loginCommand = s:BuildDownloadCommandJira(a:url, 1)
         call system(loginCommand)
         let responseText = system(command)
-        let title = s:ExtractTitle(responseText)
+        let title = s:ExtractTitle(responseText, a:url)
     endif
 
     if exists('*JiraTitleFilter')
@@ -311,7 +353,7 @@ endfunction
 function! s:DownloadAndGetTitle(url)
     let command = s:BuildDownloadCommand(a:url)
     let responseText = system(command)
-    let title = s:ExtractTitle(responseText)
+    let title = s:ExtractTitle(responseText, a:url)
     return title
 endfunction
 
