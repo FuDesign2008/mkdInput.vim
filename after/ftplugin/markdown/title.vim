@@ -49,7 +49,11 @@ function! s:BuildCurlCommandJira(url, userName, password, isLogin)
         return ''
     endif
     let loginUrl = '"' . g:jira_url_prefix . 'login.jsp"'
-    let loginData =  "--data 'os_username=" . a:userName . '&os_password='. a:password ."&os_destination=&user_role=&atl_token=&login=Log+In'"
+    let loginDataArr = [ "--data-urlencode 'os_password=" . a:password . "'",
+                        \ "--data-urlencode 'os_username=" . a:userName . "'",
+                        \ "--data  'os_destination=&user_role=&atl_token=&login=Log+In'"
+                        \ ]
+    let loginData =  join(loginDataArr, ' ')
 
     let wrappedUrl = '"' . a:url . '"'
     let theUrl = a:isLogin ? loginUrl : wrappedUrl
