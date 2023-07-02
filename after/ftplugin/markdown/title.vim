@@ -300,7 +300,7 @@ endfunction
 
 function! s:ExtractJiraUrl(line)
     " http://jira.example.com/xxx/project-8
-    let pattern = 'https\?:\/\/jira[a-zA-Z0-9%#&_?=,:+\-.\/@]\+'
+    let pattern = 'https\?:\/\/jira[a-zA-Z0-9%#&_?=,;:+\-.\/@\$\w~\!]\+'
     " project-8
     let shortPattern = '[a-zA-Z]\+-[0-9]\+'
     let matchList = []
@@ -322,7 +322,7 @@ function! s:ExtractUrl(line)
 
     " javascript reg
     " var URI_REG = /^(https?:\/\/|www\.|ssh:\/\/|ftp:\/\/)[a-z0-9&_+\-\?\/\.=\#,:]+$/i
-    let pattern = '\(https\?:\/\/\|www\)[a-zA-Z0-9%#&_?=,:+\-.\/@]\+'
+    let pattern = '\(https\?:\/\/\|www\)[a-zA-Z0-9%#&_?=,;:+\-.\/@\$\w~\!]\+'
     let matchList = []
 
     call s:ExtractUrlPattern(matchList, a:line, pattern, 0)
